@@ -1,0 +1,589 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+#include<iostream>
+#include<fstream>
+#include<windows.h>
+#include<iomanip>
+#include<ctime>
+
+using namespace std;
+
+int orderNum = 0,totalTime=45;
+fstream readerListFile, bookListFile;
+struct bookmessage
+{
+	string name = "无";
+	string id = "无";
+	bool inLibrary = true;
+	string lender = "无";
+
+};                                                         //图书信息
+
+struct readermessage
+{
+	string name = "无";
+	string id = "无";
+	bookmessage book;
+	int leftTime = 45;
+	double pendingFines = 0;
+	long int borTime = time(NULL)/3600;
+};                                                         //读者信息
+
+struct readerList
+{
+	readermessage reader;
+	readerList* next = nullptr;
+};
+readerList* readerListHead = new readerList;              //读者链表
+
+struct bookList
+{
+	bookmessage book;
+	bookList* next = nullptr;
+};
+bookList* bookListHead = new bookList;                    //图书链表
+
+
+int main()
+{
+	//函数声明
+	void readerListFileOpen(fstream&);                      //判断读者信息文件是否打开
+	void bookListFileOpen(fstream&);                        //判断图书信息文件是否打开
+	void readerListRead(fstream&, readerList*&);            //读取读者信息文件
+	void bookListRead(fstream&, bookList*&);                //读取图书信息文件
+	void readerManage(readerList*&, bookList*&, int&);      //调用读者管理菜单函数
+	void addReader(readerList*&);                           //添加读者
+	void delReader(readerList*&, bookList*&);               //删除读者
+	void showReaderList(readerList*&);                      //显示读者列表
+	void bookManage(bookList*&, int&);                      //调用图书管理菜单
+	void showBookList(bookList*&);                          //显示图书列表
+	void addBook(bookList*&);                               //添加图书
+	void delBook(readerList*&, bookList*&);                 //删除图书
+	void borAndRet(readerList*&, bookList*&, int&);         //打开借书与还书菜单
+	void borBook(readerList*&, bookList*&);                 //读者借书
+	void retBook(readerList*&, bookList*&);                 //读者还书
+	void finePayment(readerList*&);                         //罚款缴纳
+	void readerListUpdate(fstream&, readerList*&);          //读者列表文件更新
+	void bookListUpdate(fstream&, bookList*&);              //图书列表文件更新
+	void getReader(readerList*&);                           //查询读者信息
+
+	cout << endl << "欢迎进入西电图书馆书蜗O2O服务中心！西电小蜗为您服务！(doge)" << endl << endl;
+
+	readerListFileOpen(readerListFile);                      //判断读者信息文件是否打开
+	bookListFileOpen(bookListFile);                          //判断图书信息文件是否打开
+	readerListRead(readerListFile, readerListHead);          //读取读者信息文件
+	bookListRead(bookListFile, bookListHead);                //读取图书信息文件
+
+	while (orderNum != 4)
+	{
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_BLUE);
+		cout << endl << "主菜单" << endl;
+		SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+		cout << "1.读者信息管理" << endl << "2.图书信息管理" << endl << "3.借书还书与罚款缴纳" << endl
+			<< "4.退出系统" << endl << "请选择：";
+		cin >> orderNum;
+		switch (orderNum)
+		{
+		case 1:    readerManage(readerListHead, bookListHead, orderNum);
+			break;
+		case 2:    bookManage(bookListHead, orderNum);
+			break;
+		case 3:    borAndRet(readerListHead, bookListHead, orderNum);
+			break;
+		case 4:    orderNum = 4;
+		default:cout << "请重新选择："; break;
+		}
+	};
+	readerListFile.close();
+	bookListFile.close();
+	readerListFile.open("reader.txt", ios_base::out);
+	bookListFile.open("book.txt", ios_base::out);
+	readerListUpdate(readerListFile, readerListHead);
+	bookListUpdate(bookListFile, bookListHead);
+	readerListFile.close();
+	bookListFile.close();
+	for (readerList* p = readerListHead; readerListHead->next != nullptr; readerListHead = p)
+	{
+		p = readerListHead->next;
+		delete readerListHead;
+	}
+	delete readerListHead;
+	for (bookList* p = bookListHead; bookListHead->next != nullptr; bookListHead = p)
+	{
+		p = bookListHead->next;
+		delete bookListHead;
+	}
+	delete bookListHead;
+	return 0;
+}
+
+
+void readerListFileOpen(fstream& readerListFile)
+{
+	readerListFile.open("reader.txt");
+	if (!readerListFile.is_open())
+	{
+		cout << "读者信息文件打开失败！" << endl;
+		readerListFile.close();
+		exit(EXIT_FAILURE);
+	}
+}
+
+void bookListFileOpen(fstream& bookListFile)
+{
+	bookListFile.open("book.txt");
+	if (!bookListFile.is_open())
+	{
+		cout << "图书信息文件打开失败！" << endl;
+		bookListFile.close();
+		bookListFile.close();
+		exit(EXIT_FAILURE);
+	}
+}
+
+void readerListRead(fstream& readerListFile, readerList*& readerListHead)
+{
+	for (; readerListFile.peek() != EOF;)
+	{
+		readerList* p = new readerList;
+		p->next = readerListHead;
+		readerListFile >> readerListHead->reader.id >> readerListHead->reader.name
+			>> readerListHead->reader.book.name >> readerListHead->reader.book.id
+			>> readerListHead->reader.leftTime >> readerListHead->reader.pendingFines
+			>> readerListHead->reader.borTime;
+		if (readerListHead->reader.book.name != "无")
+		{
+			readerListHead->reader.leftTime = totalTime - (((time(NULL)/3600) - readerListHead->reader.borTime) / 24);
+			if (readerListHead->reader.leftTime < 0)
+			{
+				readerListHead->reader.pendingFines = readerListHead->reader.leftTime * (-1);
+			}
+		}
+		else
+		{
+			readerListHead->reader.borTime = time(NULL)/3600;
+		}
+		readerListHead = p;
+		readerListFile.get();
+	}
+	cout << "读者信息文件读取成功。" << endl;
+}
+
+void bookListRead(fstream& bookListFile, bookList*& bookListHead)
+{
+	for (; bookListFile.peek()!=EOF;)
+	{
+		bookList* p = new bookList;
+		p->next = bookListHead;
+		bookListFile >> bookListHead->book.name >> bookListHead->book.id
+			>> bookListHead->book.inLibrary >> bookListHead->book.lender;
+		bookListHead = p;
+		bookListFile.get();
+	}
+	cout << "图书信息文件读取成功。" << endl;
+}
+
+void addReader(readerList*& readerListHead, bookList*& bookListHead)
+{
+	string stuId = "无";
+	string stuName = "无";
+	readerList* p = new readerList;
+
+	p->next = readerListHead;
+	cout << "请输入读者的学号和姓名：";
+	cin >> stuId >> stuName;
+	readerListHead->reader.id = stuId;
+	readerListHead->reader.name = stuName;
+	readerListHead = p;
+	cout << "添加成功！" << endl;
+}
+
+void delReader(readerList*& readerListHead, bookList*& bookListHead)
+{
+	string stuId = "无";
+	string stuName = "无";
+	cout << "请输入被删除读者的学号和姓名：";
+	cin >> stuId >> stuName;
+	readerList* prev, * cur;
+	prev = readerListHead;
+	cur = readerListHead->next;
+	for (; cur; prev = cur, cur = cur->next)
+	{
+		if (cur->reader.id == stuId and cur->reader.name == stuName)
+		{
+			break;
+		}
+	}
+	if (cur == nullptr)
+	{
+		cout << "该读者不在读者列表中或输入的学号与读者姓名不匹配！" << endl;
+	}
+	else if (cur->reader.book.name != "无")
+	{
+		cout << "该读者正在借阅图书，无法删除！" << endl;
+	}
+	else
+	{
+		prev->next = cur->next;
+		delete cur;
+		cout << "删除成功！" << endl;
+	}
+}
+
+void showReaderList(readerList*& readerListHead)
+{
+	readerList* ptr = readerListHead->next;
+	cout.setf(ios_base::left, ios_base::adjustfield);
+	cout << setw(15) << "读者学号" << setw(10) << "读者姓名" << setw(15) << "读者借阅书名"
+		<< setw(15) << "读者借阅书号" << setw(10) << "剩余天数" << setw(5) << "待缴罚金" << endl;
+	for (; ptr; ptr = ptr->next)
+	{
+		cout << setw(15) << ptr->reader.id << setw(10) << ptr->reader.name
+			<< setw(15) << ptr->reader.book.name << setw(15) << ptr->reader.book.id
+			<< setw(10) << ptr->reader.leftTime << setw(5) << ptr->reader.pendingFines << endl;
+	}
+}
+
+
+void getReader(readerList*&)
+{
+	readerList* ptr = readerListHead->next;
+	string readerName = "",readerId="";
+	cout.setf(ios_base::left, ios_base::adjustfield);
+	cout << "请输入读者学号和姓名：";
+	cin >> readerId >> readerName;
+	for (; ptr; ptr = ptr->next)
+	{
+		if (ptr->reader.name==readerName and ptr->reader.id==readerId)
+		{
+			cout << setw(15) << "读者学号"            << setw(10)     << "读者姓名"               << setw(15) << "读者借阅书名"
+				<< setw(15)  << "读者借阅书号"        << setw(10)     << "剩余天数"               << setw(5)  << "待缴罚金" << endl;
+		    cout << setw(15) << ptr->reader.id        << setw(10)     << ptr->reader.name
+				<< setw(15)  << ptr->reader.book.name << setw(15)     << ptr->reader.book.id
+				<< setw(10)  << ptr->reader.leftTime  << setw(5)      << ptr->reader.pendingFines << endl;
+			break;
+		}
+	}
+	if (ptr == nullptr)
+	{
+		cout << "输入的读者学号与姓名不匹配或该读者不在列表中！";
+
+	}
+}
+
+
+void readerManage(readerList*& readerListHead, bookList*& bookListHead, int& orderNum)
+{
+	int order = 0;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_BLUE);
+	cout << endl << "读者管理菜单" << endl;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+	cout << "1.添加读者" << endl << "2.删除读者" << endl << "3.显示读者列表" << endl
+		 << "4.查询读者" << endl << "5.返回主菜单" << endl << "6.退出系统" << endl << "请选择：";
+	cin >> order;
+	switch (order)
+	{
+	case 1:   addReader(readerListHead, bookListHead);
+		readerManage(readerListHead, bookListHead, orderNum);
+		break;
+	case 2:   delReader(readerListHead, bookListHead);
+		readerManage(readerListHead, bookListHead, orderNum);
+		break;
+	case 3:   showReaderList(readerListHead);
+		readerManage(readerListHead, bookListHead, orderNum);
+		break;
+	case 4:   getReader(readerListHead);
+		readerManage(readerListHead, bookListHead, orderNum);
+		break;
+	case 5:               break;
+	case 6: orderNum = 4; break;
+	default:cout << "请重新选择："; break;
+	}
+}
+
+void addBook(bookList*& bookListHead)
+{
+	string bookName = "无";
+	string bookId = "无";
+	bookList* p = new bookList;
+
+	cout << "请输入图书的书名和书号：";
+	cin >> bookName >> bookId;
+	bookListHead->book.name = bookName;
+	bookListHead->book.id = bookId;
+	p->next = bookListHead;
+	bookListHead = p;
+	cout << "添加成功！" << endl;
+}
+
+void delBook(readerList*& readerListHead, bookList*& bookListHead)
+{
+	string bookId = "无";
+	string bookName = "无";
+
+	cout << "请输入被删除图书的书名和书号：";
+	cin >> bookName >> bookId;
+	bookList* prev, * cur;
+	prev = bookListHead;
+	cur = bookListHead->next;
+	for (; cur; prev = cur, cur = cur->next)
+	{
+		if (cur->book.id == bookId and cur->book.name == bookName)
+		{
+			break;
+		}
+	}
+	if (cur == nullptr)
+	{
+		cout << "该图书不在图书列表中！" << endl;
+	}
+	else if (cur->book.lender != "无")
+	{
+		cout << "此图书正在被" << cur->book.lender << "借阅,无法删除！" << endl; ;
+	}
+	else
+	{
+		prev->next = cur->next;
+		delete cur;
+		cout << "删除成功！" << endl;
+	}
+}
+
+void showBookList(bookList*& bookListHead)
+{
+	bookList* ptr = bookListHead->next;
+	cout.setf(ios_base::left, ios_base::adjustfield);
+	cout << setw(15) << "书名" << setw(10) << "书号" << setw(8) << "是否在馆" << "	" << setw(10) << "借阅者姓名" << endl;
+	for (; ptr; ptr = ptr->next)
+	{
+		cout << setw(15) << ptr->book.name << setw(10) << ptr->book.id
+			<< setw(8) << ptr->book.inLibrary << "	" << setw(10) << ptr->book.lender
+			<< endl;
+	}
+}
+
+void bookManage(bookList*& bookListHead, int& orderNum)
+{
+	int order = 0;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_BLUE);
+	cout << endl << "图书管理菜单" << endl;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+	cout << "1.添加图书" << endl << "2.删除图书" << endl << "3.显示图书列表" << endl
+		<< "4.返回主菜单" << endl << "5.退出系统" << endl << "请选择：";
+	cin >> order;
+	switch (order)
+	{
+	case 1:
+		addBook(bookListHead);
+		bookManage(bookListHead, orderNum);
+		break;
+	case 2:
+		delBook(readerListHead, bookListHead);
+		bookManage(bookListHead, orderNum);
+		break;
+	case 3:
+		showBookList(bookListHead);
+		bookManage(bookListHead, orderNum);
+		break;
+	case 4:
+		break;
+	case 5:
+		orderNum = 4;
+		break;
+	}
+}
+
+void borBook(readerList*& readerListHead, bookList*& bookListHead)
+{
+	string stuId = "无", bookId = "无";
+	string stuName = "无", bookName = "无";
+	bookList* ptr1 = bookListHead->next;
+	readerList* ptr2 = readerListHead->next;
+
+	cout << "读者的学号、姓名、所借图书的书号和图书名称：";
+	cin >> stuId >> stuName >> bookId >> bookName;
+	for (; ptr2; ptr2 = ptr2->next)
+	{
+		if (ptr2->reader.id == stuId and ptr2->reader.name == stuName)
+		{
+			if (ptr2->reader.book.name != "无")
+			{
+				cout << "该同学正在借读其它图书！" << endl;
+				break;
+			}
+			else
+			{
+				for (; ptr1; ptr1 = ptr1->next)
+				{
+					if (ptr1->book.id == bookId and ptr1->book.name == bookName)
+					{
+						break;
+					}
+				}
+			}
+			break;
+		}
+	}
+	if (ptr2 == nullptr)
+	{
+		cout << "输入的读者姓名和学号不匹配！" << endl;
+	}
+	else if (ptr1 == nullptr)
+	{
+		cout << "输入的图书书号与书名不匹配！" << endl;
+	}
+	else
+	{
+		ptr2->reader.book.lender = stuName;
+		ptr2->reader.book.inLibrary = false;
+		ptr2->reader.book.name = bookName;
+		ptr2->reader.book.id = bookId;
+		ptr2->reader.borTime = time(NULL)/3600;
+		ptr1->book.lender = stuName;
+		ptr1->book.inLibrary = false;
+		cout << "借书成功！" << endl;
+	}
+}
+
+void retBook(readerList*& readerListHead, bookList*& bookListHead)
+{
+	string stuId = "无", bookId = "无";
+	string stuName = "无", bookName = "无";
+	bookList* ptr1 = bookListHead->next;
+	readerList* ptr2 = readerListHead->next;
+
+	cout << "读者的学号、姓名、所还图书的书号和图书名称：";
+	cin >> stuId >> stuName >> bookId >> bookName;
+	for (; ptr1; ptr1 = ptr1->next)
+	{
+		if (ptr1->book.id == bookId and ptr1->book.name == bookName)
+		{
+			break;
+		}
+	}
+	if (ptr1 == nullptr)
+	{
+		cout << "输入的图书书号与书名不匹配！" << endl;
+		return;
+	}
+	else
+	{
+		for (; ptr2; ptr2 = ptr2->next)
+		{
+			if (ptr2->reader.id == stuId and ptr2->reader.name == stuName)
+			{
+				break;
+			}
+		}
+	}
+	if (ptr2 == nullptr)
+	{
+		cout << "输入的读者学号和姓名不匹配！" << endl;
+		return;
+	}
+	else if (ptr2->reader.leftTime < 0)
+	{
+		cout << "您已逾期，请先缴纳罚款！" << endl;
+		return;
+	}
+	else
+	{
+		ptr1->book.lender = "无";
+		ptr1->book.inLibrary = true;
+		ptr2->reader.book.lender = "无";
+		ptr2->reader.book.inLibrary = true;
+		ptr2->reader.book.name = "无";
+		ptr2->reader.book.id = "无";
+		cout << "还书成功！" << endl;
+	}
+}
+
+void finePayment(readerList*& readerListHead)
+{
+	string stuId = "无", stuName = "无";
+	int    order = 0;
+	readerList* ptr = readerListHead->next;
+	cout << "缴纳罚款的读者的学号和姓名：";
+	cin >> stuId >> stuName ;
+	for (; ptr; ptr = ptr->next)
+	{
+		if (ptr->reader.id == stuId and ptr->reader.name == stuName)
+		{
+			break;
+		}
+	}
+	if (ptr == nullptr)
+	{
+		cout << "输入的读者学号和姓名不匹配！" << endl;
+		return;
+	}
+	else
+	{
+		cout << "应缴纳" << ptr->reader.leftTime * (-1) << "￥,是否缴纳：" << endl << "1.是" << endl << "2.否" << endl;
+		cin >> order;
+		switch (order)
+		{
+		case 1:ptr->reader.leftTime = totalTime;
+			ptr->reader.borTime = time(NULL)/3600;
+			ptr->reader.pendingFines = 0;
+			cout << "办理成功！" << endl;
+			break;
+		case 2:
+			break;
+		default:cout << "请重新选择："; break;
+		}
+
+	}
+}
+
+void borAndRet(readerList*& readerListHead, bookList*& bookListHead, int& orderNum)
+{
+	int order = 0;
+
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_BLUE);
+	cout << endl << "借书与还书菜单" << endl;
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), FOREGROUND_RED | FOREGROUND_GREEN | FOREGROUND_BLUE);
+	cout << "1.读者借书" << endl << "2.读者还书" << endl << "3.罚款缴纳" << endl
+		 << "4.返回主菜单" << endl <<"5.退出系统"  << endl << "请选择：";
+	cin >> order;
+	switch (order)
+	{
+	case 1:borBook(readerListHead, bookListHead);
+		borAndRet(readerListHead, bookListHead, orderNum);
+		break;
+	case 2:retBook(readerListHead, bookListHead);
+		borAndRet(readerListHead, bookListHead, orderNum);
+		break;
+	case 3:finePayment(readerListHead);
+		borAndRet(readerListHead, bookListHead, orderNum);
+		break;
+	case 4:
+		break;
+	case 5:orderNum = 4;
+		break;
+	}
+}
+
+void readerListUpdate(fstream& readerListFile, readerList*& readerListHead)
+{
+	readerListFile.setf(ios_base::left, ios_base::adjustfield);
+	for (; readerListHead->next != nullptr; readerListHead = readerListHead->next)
+	{
+		readerListFile  << readerListHead->next->reader.id        <<" "  << readerListHead->next->reader.name         << " "
+		                << readerListHead->next->reader.book.name << " " << readerListHead->next->reader.book.id      << " " 
+			            << readerListHead->next->reader.leftTime  << " " << readerListHead->next->reader.pendingFines << " "
+			            <<readerListHead->next->reader.borTime
+			            << endl;
+	}
+}
+
+void bookListUpdate(fstream& bookListFile, bookList*& bookListHead)
+{
+	bookListFile.setf(ios_base::left, ios_base::adjustfield);
+	for (; bookListHead->next != nullptr; bookListHead = bookListHead->next)
+	{
+		bookListFile << bookListHead->next->book.name      << " " << bookListHead->next->book.id     << " "
+			         << bookListHead->next->book.inLibrary << " " << bookListHead->next->book.lender 
+			         << endl;
+	}
+}
